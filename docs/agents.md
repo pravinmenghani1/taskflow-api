@@ -32,31 +32,32 @@ azure-identity==1.19.0
 
 ### 2a — Create the agent (run once, save the agent ID)
 
+> Compatible with `azure-ai-agents>=1.1.0` — uses `.agents.create()` and a plain
+> tool list instead of the deprecated `ToolSet` / `create_agent` beta API.
+
 ```python
 # scripts/create_agent.py
+"""Create the TaskFlow triage agent in Azure AI Foundry.
+
+Run once, then save the printed agent ID to your .env as AZURE_AGENT_ID.
+
+Usage:
+    az login
+    python scripts/create_agent.py
+"""
 from azure.ai.projects import AIProjectClient
-from azure.ai.agents.models import (
-    BingGroundingTool,
-    CodeInterpreterTool,
-    ToolSet,
-)
+from azure.ai.agents.models import CodeInterpreterTool
 from azure.identity import DefaultAzureCredential
 
-# Replace with your Foundry project endpoint
-# Found in: AI Foundry portal → your project → Overview → Endpoint
-PROJECT_ENDPOINT = "https://<your-foundry-resource>.services.ai.azure.com/api/projects/<your-project>"
+PROJECT_ENDPOINT = "https://myfndryq.services.ai.azure.com/api/projects/proj-default"
 
 client = AIProjectClient(
     endpoint=PROJECT_ENDPOINT,
     credential=DefaultAzureCredential(),
 )
 
-# Build toolset — add/remove tools as needed
-tools = ToolSet()
-tools.add(CodeInterpreterTool())  # lets agent write/run code for analysis
-# tools.add(BingGroundingTool(...))  # add if you want web grounding
-
-agent = client.agents.create_agent(
+# Use .agents.create() with a plain list of tools (not ToolSet)
+agent = client.agents.create(
     model="gpt-4o",  # model deployed in your Foundry project
     name="taskflow-triage-agent",
     instructions="""You are a task planning and triage assistant for TaskFlow.
@@ -66,16 +67,41 @@ Help users:
 - Identify blockers and dependencies between tasks
 - Summarise the current task list and flag overdue or stalled items
 Always return structured suggestions the app can act on.""",
-    toolset=tools,
+    tools=[CodeInterpreterTool()],
 )
 
-print(f"Agent created. ID: {agent.id}")
-# Save this ID → add to your .env as AZURE_AGENT_ID=<id>
+print(f"\nAgent created successfully!")
+print(f"Agent ID : {agent.id}")
+print(f"Agent name: {agent.name}")
+print(f"\nAdd to your .env:")
+print(f"AZURE_FOUNDRY_ENDPOINT={PROJECT_ENDPOINT}")
+print(f"AZURE_AGENT_ID={agent.id}")
 ```
 
 ```bash
+# Log in first, then run
+az login
 python scripts/create_agent.py
 ```
+
+Expected output:
+```
+Agent created successfully!
+Agent ID : asst_xxxxxxxxxxxxxxxxxx
+Agent name: taskflow-triage-agent
+
+Add to your .env:
+AZURE_FOUNDRY_ENDPOINT=https://myfndryq.services.ai.azure.com/api/projects/proj-default
+AZURE_AGENT_ID=asst_xxxxxxxxxxxxxxxxxx
+```
+
+API changes from beta → 1.1.0:
+
+| Old (beta) | New (1.1.0) |
+|---|---|
+| `client.agents.create_agent(...)` | `client.agents.create(...)` |
+| `tools=ToolSet()` object | `tools=[CodeInterpreterTool()]` plain list |
+| `msg.role == "assistant"` | `msg.role == MessageRole.AGENT` |
 
 ---
 
