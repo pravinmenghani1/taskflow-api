@@ -32,55 +32,47 @@ azure-identity==1.19.0
 
 ### 2a — Create the agent (run once, save the agent ID)
 
-> Compatible with `azure-ai-agents>=1.1.0` — uses `.agents.create()` and a plain
-> tool list instead of the deprecated `ToolSet` / `create_agent` beta API.
+> Uses `AgentsClient` directly from `azure.ai.agents` — **not** `AIProjectClient.agents`
+> which points to a different deployment-management API surface and does not have
+> `create_agent`. Compatible with `azure-ai-agents >= 1.1.0`.
 
 ```python
 # scripts/create_agent.py
-"""Create the TaskFlow triage agent in Azure AI Foundry.
-
-Run once, then save the printed agent ID to your .env as AZURE_AGENT_ID.
-
-Usage:
-    az login
-    python scripts/create_agent.py
-"""
-from azure.ai.projects import AIProjectClient
+from azure.ai.agents import AgentsClient
 from azure.ai.agents.models import CodeInterpreterTool
 from azure.identity import DefaultAzureCredential
 
 PROJECT_ENDPOINT = "https://myfndryq.services.ai.azure.com/api/projects/proj-default"
 
-client = AIProjectClient(
+agents_client = AgentsClient(
     endpoint=PROJECT_ENDPOINT,
     credential=DefaultAzureCredential(),
 )
 
-# Use .agents.create() with a plain list of tools (not ToolSet)
-agent = client.agents.create(
-    model="gpt-4o",  # model deployed in your Foundry project
-    name="taskflow-triage-agent",
-    instructions="""You are a task planning and triage assistant for TaskFlow.
+with agents_client:
+    agent = agents_client.create_agent(
+        model="gpt-4o",  # must match a deployed model name in your Foundry project
+        name="taskflow-triage-agent",
+        instructions="""You are a task planning and triage assistant for TaskFlow.
 Help users:
 - Break down vague requests into concrete tasks with clear titles and descriptions
 - Suggest priority (todo / in_progress / done) and effort estimates
 - Identify blockers and dependencies between tasks
 - Summarise the current task list and flag overdue or stalled items
 Always return structured suggestions the app can act on.""",
-    tools=[CodeInterpreterTool()],
-)
+        tools=CodeInterpreterTool().definitions,
+    )
 
-print(f"\nAgent created successfully!")
-print(f"Agent ID : {agent.id}")
-print(f"Agent name: {agent.name}")
-print(f"\nAdd to your .env:")
-print(f"AZURE_FOUNDRY_ENDPOINT={PROJECT_ENDPOINT}")
-print(f"AZURE_AGENT_ID={agent.id}")
+    print(f"\nAgent created successfully!")
+    print(f"Agent ID : {agent.id}")
+    print(f"Agent name: {agent.name}")
+    print(f"\nAdd to your .env / Container App env vars:")
+    print(f"AZURE_FOUNDRY_ENDPOINT={PROJECT_ENDPOINT}")
+    print(f"AZURE_AGENT_ID={agent.id}")
 ```
 
 ```bash
-# Log in first, then run
-az login
+# Cloud Shell is already authenticated — no az login needed
 python scripts/create_agent.py
 ```
 
@@ -90,18 +82,15 @@ Agent created successfully!
 Agent ID : asst_xxxxxxxxxxxxxxxxxx
 Agent name: taskflow-triage-agent
 
-Add to your .env:
+Add to your .env / Container App env vars:
 AZURE_FOUNDRY_ENDPOINT=https://myfndryq.services.ai.azure.com/api/projects/proj-default
 AZURE_AGENT_ID=asst_xxxxxxxxxxxxxxxxxx
 ```
 
-API changes from beta → 1.1.0:
-
-| Old (beta) | New (1.1.0) |
-|---|---|
-| `client.agents.create_agent(...)` | `client.agents.create(...)` |
-| `tools=ToolSet()` object | `tools=[CodeInterpreterTool()]` plain list |
-| `msg.role == "assistant"` | `msg.role == MessageRole.AGENT` |
+> **Why not `AIProjectClient.agents`?**  
+> `AIProjectClient.agents` is the Foundry *deployment management* API (list, enable,
+> disable agents-as-services). `AgentsClient` from `azure.ai.agents` is the
+> conversational Agents SDK with `create_agent`, threads, messages, and runs.
 
 ---
 
